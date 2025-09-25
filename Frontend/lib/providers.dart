@@ -46,16 +46,16 @@ class SearchState {
 
 final searchProvider = StateNotifierProvider<SearchNotifier, SearchState>((ref)
 {
-return SearchNotifier(ref.read);
+return SearchNotifier(ref);
 });
 
 class SearchNotifier extends StateNotifier<SearchState> {
-    final Reader read;
-    SearchNotifier(this.read) : super(SearchState());
+    final Ref ref;
+    SearchNotifier(this.ref) : super(SearchState());
     Future<void> search(String query) async {
         state = state.copyWith(loading: true, error: null, query: query, page: 1, results: []);
         try {
-            final api = read(apiProvider);
+            final api = ref.read(apiProvider);
             final resp = await api.searchFoods(query, page: 1, pageSize: 20);
             state = state.copyWith(
                 loading: false,
@@ -72,7 +72,7 @@ class SearchNotifier extends StateNotifier<SearchState> {
             state = state.copyWith(loading: true, error: null);
         try {
             final nextPage = state.page + 1;
-            final api = read(apiProvider);
+            final api = ref.read(apiProvider);
             final resp = await api.searchFoods(state.query, page: nextPage, pageSize: 20);
             state = state.copyWith(
                 loading: false,
