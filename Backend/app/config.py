@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     usda_api_key: str
     default_page_size: int = 20
     details_cache_ttl: int = 600
+    CORS_ALLOW_ORIGINS: str = "http://localhost:8080,http://127.0.0.1:8080"
 
     USDA_SEARCH_URL: str = "https://api.nal.usda.gov/fdc/v1/foods/search"
     USDA_DETAILS_URL: str = "https://api.nal.usda.gov/fdc/v1/food/{fdc_id}"

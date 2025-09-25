@@ -1,5 +1,5 @@
 from typing import Dict
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Query
 from pydantic import ValidationError
 from app.models.schemas import Nutrients, FoodItem, SearchResponse
 from app.database_services.database import Base
@@ -8,6 +8,7 @@ from app.database_services.database import SessionLocal
 from app.database_services.services import get_todos, get_todo_by_id, create_todo, update_todo, delete_todo
 from fastapi.middleware.cors import CORSMiddleware
 from app import helpers
+from app.details_cache import _cache_get, _cache_set
 import httpx
 from app.config import settings
 
@@ -18,9 +19,11 @@ Base.metadata.create_all(
 
 app = FastAPI()
 
+allow_origins = [o.strip() for o in settings.CORS_ALLOW_ORIGINS.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins
+    allow_origins=["*"] if "*" in allow_origins else allow_origins,  # Allows all origins
     allow_credentials=True,
     allow_methods=["*"],  # Allows all methods
     allow_headers=["*"],  # Allows all headers
@@ -35,10 +38,15 @@ def get_db():
         db.close()
 
 @app.get("/search", response_model=SearchResponse)
-async def search_foods(query: str, page: int, page_size: int):
+async def search_foods(
+    query: str =  Query(..., min_length=1, description="Food name to search"), 
+    page: int = Query(1, ge=1), 
+    page_size: int= Query(None, ge=1, le=settings.MAX_PAGE_SIZE,
+                          description="Max 20 per page"),
+    ):
     size = page_size or min(settings.default_page_size, settings.MAX_PAGE_SIZE)
     params = {
-        "api_key": settings.usda,
+        "api_key": settings.usda_api_key,
         "query": query,
         "pageNumber": page,
         "pageSize": size,
@@ -73,12 +81,12 @@ async def search_foods(query: str, page: int, page_size: int):
 
 @app.get("/foods/{fdc_id}", response_model=FoodItem)
 async def food_details(fdc_id: int):
-    # cached = _cache_get(fdc_id)
-    # if cached:
-    #     try:
-    #         return FoodItem.model_validate(cached)
-    #     except ValidationError:
-    #         pass
+    cached = _cache_get(fdc_id)
+    if cached:
+        try:
+            return FoodItem.model_validate(cached)
+        except ValidationError:
+            pass
     params = {"api_key": settings.usda_api_key}
     url = settings.USDA_DETAILS_URL.format(fdc_id=fdc_id)
     async with await helpers._get_client() as client:
@@ -93,12 +101,12 @@ async def food_details(fdc_id: int):
     food_raw = r.json()
     item = helpers._simplify_food(food_raw)
     # cache
-    # _cache_set(fdc_id, item.model_dump())
+    _cache_set(fdc_id, item.model_dump())
     return item
 
-@app.get("/health")
-async def health() -> Dict[str, str]:
-    return {"status": "ok"}
+# @app.get("/health")
+# async def health() -> Dict[str, str]:
+#     return {"status": "ok"}
 
 
 
